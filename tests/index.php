@@ -14,6 +14,9 @@ $entity2 = new Entity([
     'title' => 'entity2',
     'same'     => $entity1,
     'copy'  => $entity1,
+    'children' => [
+        $entity1,
+    ],
 ]);
 $entity3 = new Entity([
     'title'    => 'entity3',
