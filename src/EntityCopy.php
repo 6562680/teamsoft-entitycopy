@@ -98,6 +98,7 @@ class EntityCopy
 
         $graph = [];
         $tree = $this->strategyTree->getTree();
+
         $queueItem = [ $clonedRoot ];
         $queueStrategy = [ $treeRoot ];
         while ( null !== key($queueStrategy) ) {
@@ -229,10 +230,8 @@ class EntityCopy
     public function strategyToArray() : array
     {
         $tree = $this->strategyTree->getTree();
-        dump($tree);
 
         $result = ( $fn = function (Strategy $currentStrategy) use (&$fn, &$tree) {
-            dump($currentStrategy->getOne(), $currentStrategy->getMany());
             $result = [];
 
             $strategyId = $currentStrategy->getId();
