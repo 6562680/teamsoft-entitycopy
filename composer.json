@@ -1,0 +1,21 @@
+{
+  "name": "gzhegow/entitycopy",
+  "description": "Entity copier with strategy and pipe support",
+  "type": "library",
+  "authors": [
+    {
+      "name": "gzhegow",
+      "email": "6562680@gmail.com"
+    }
+  ],
+  "require": {},
+  "autoload": {
+    "psr-4": {
+      "Teamsoft\\EntityCopy\\": "./src",
+      "Teamsoft\\EntityCopy\\Tests\\": "./tests/src"
+    }
+  },
+  "require-dev": {
+    "ext-json": "*"
+  }
+}
