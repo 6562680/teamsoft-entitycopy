@@ -7,7 +7,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 
 /**
  * @ORM\Entity
- * @ORM\Table(name="user_emails")
+ * @ORM\Table(name="users_emails")
  */
 class EmailEntity extends AbstractEntity
 {
@@ -19,11 +19,14 @@ class EmailEntity extends AbstractEntity
 
 
     /**
-     * @ORM\ManyToMany (targetEntity="UserEntity", inversedBy="userEmails")
-     * @ORM\JoinTable(?)
+     * @ORM\ManyToMany(targetEntity="UserEntity")
+     * @ORM\JoinTable(name="users_emails",
+     *     joinColumns={@ORM\JoinColumn(name="email_id", referencedColumnName="id")},
+     *     inverseJoinColumns={@ORM\JoinColumn(name="user_id", referencedColumnName="id")}
+     * )
      * @var UserEntity[]|ArrayCollection
      */
-    public $users;
+    public $emailUsers;
 
 
     /**
