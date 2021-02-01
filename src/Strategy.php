@@ -62,9 +62,9 @@ class Strategy
     /**
      * @return object
      */
-    public function create() : object
+    public function build() : object
     {
-        return $this->entityCopy->create();
+        return $this->entityCopy->build();
     }
 
 

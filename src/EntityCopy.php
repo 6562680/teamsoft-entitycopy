@@ -2,8 +2,6 @@
 
 namespace Teamsoft\EntityCopy;
 
-use Teamsoft\EntityCopy\Exceptions\Logic\InvalidArgumentException;
-
 /**
  * Class EntityCopy
  */
@@ -15,48 +13,81 @@ class EntityCopy
     protected $from;
 
     /**
-     * @var \Closure
-     */
-    protected $entityIdAllocator;
-
-    /**
-     * @var Strategy
-     */
-    protected $strategy;
-    /**
      * @var StrategyTree
      */
     protected $strategyTree;
 
     /**
-     * @var EntityCopyPipeline
+     * @var \Closure
      */
-    protected $pipeline;
+    protected $entityIdAllocator;
 
     /**
-     * @var \Closure[]
+     * @var ResultMapperQueue
      */
-    protected $pipe = [];
+    protected $resultMapper;
     /**
-     * @var \Closure[]
+     * @var ResultReducerQueue
      */
-    protected $pipeOne = [];
-    /**
-     * @var \Closure[]
-     */
-    protected $pipeMany = [];
+    protected $resultReducer;
 
 
     /**
      * Constructor
      *
-     * @param object $from
+     * @param null|object $from
      */
-    public function __construct(object $from)
+    public function __construct(object $from = null)
     {
-        $this->from($from);
+        if (isset($from)) {
+            $this->from($from);
+        }
 
-        $this->pipeline = new EntityCopyPipeline();
+        $this->resultMapper = new ResultMapperQueue();
+        $this->resultReducer = new ResultReducerQueue($carry = []);
+    }
+
+
+    /**
+     * @return Strategy
+     */
+    public function newStrategy() : Strategy
+    {
+        $this->strategyTree = new StrategyTree();
+
+        $this->strategyTree->setRoot($strategy = new Strategy($this, $this->strategyTree));
+
+        return $strategy;
+    }
+
+
+    /**
+     * @param \Closure[] ...$mappers
+     *
+     * @return EntityCopy
+     */
+    public function newMapper(...$mappers) : EntityCopy
+    {
+        $this->resultMapper = new ResultMapperQueue();
+
+        $this->map(...$mappers);
+
+        return $this;
+    }
+
+    /**
+     * @param mixed      $carry
+     * @param \Closure[] ...$reducers
+     *
+     * @return EntityCopy
+     */
+    public function newReducer($carry, ...$reducers) : EntityCopy
+    {
+        $this->resultReducer = new ResultReducerQueue($carry);
+
+        $this->reduce(...$reducers);
+
+        return $this;
     }
 
 
@@ -67,110 +98,165 @@ class EntityCopy
      */
     public function from(object $from) : Strategy
     {
-        if (! is_object($from)) {
-            throw new InvalidArgumentException('From should be object');
-        }
-
         $this->from = $from;
 
-        return $this->strategy();
+        $strategy = $this->newStrategy();
+
+        return $strategy;
     }
 
 
     /**
+     * @return Strategy
+     */
+    public function strategy() : Strategy
+    {
+        return $this->newStrategy();
+    }
+
+
+    /**
+     * @param null|object $from
+     *
      * @return object
      */
-    public function create() : object
+    public function build(object $from = null) : object
     {
-        /**
-         * @var Strategy[] $queueStrategy
-         * @var object[]   $queueItem
-         *
-         * @var Strategy   $currentStrategy
-         * @var object     $currentItem
-         */
+        $this->from = $from
+            ?? $this->from;
 
-        $pipeline = $this->pipeline;
-        $entityIdAllocator = $this->entityIdAllocator;
-
-        $clonedRoot = clone $this->from;
-        $treeRoot = $this->strategyTree->getTreeRoot();
+        $fromCloned = clone $this->from;
+        $strategyRoot = $this->strategyTree->getTreeRoot();
 
         $graph = [];
-        $tree = $this->strategyTree->getTree();
-
-        $queueItem = [ $clonedRoot ];
-        $queueStrategy = [ $treeRoot ];
+        $queueItem = [ $fromCloned ];
+        $queueStrategy = [ $strategyRoot ];
         while ( null !== key($queueStrategy) ) {
             $currentItem = array_shift($queueItem);
             $currentStrategy = array_shift($queueStrategy);
 
-            ( function (Strategy $currentStrategy) use (
-                &$graph,
-                &$tree,
+            $this->buildItem(
+                $currentItem,
+                $currentStrategy,
 
-                &$queueItem,
-                &$queueStrategy,
+                $queueItem,
+                $queueStrategy,
 
-                $pipeline,
-                $entityIdAllocator
-            ) {
-                $strategyId = $currentStrategy->getId();
-
-                foreach ( $currentStrategy->getOne() as $property => $class ) {
-                    if (! isset($this->{$property})) {
-                        continue;
-                    }
-
-                    $item = $this->{$property};
-                    $itemId = ( new EntityDecorator($item, $entityIdAllocator) )->getId();
-                    $itemCloned = $graph[ $class ][ $itemId ]
-                        ?? clone $item;
-
-                    $itemCloned = $pipeline->handle($itemCloned, $this, $property);
-
-                    $itemCloned = $pipeline->handleOne($itemCloned, $this, $property);
-
-                    $this->{$property} = $itemCloned;
-
-                    $graph[ $class ][ $itemId ] = $itemCloned;
-
-                    if (isset($tree[ $strategyId ][ $property ])) {
-                        $queueItem[] = $itemCloned;
-                        $queueStrategy[] = $tree[ $strategyId ][ $property ];
-                    }
-                }
-
-                foreach ( $currentStrategy->getMany() as $property => $class ) {
-                    $itemsCloned = [];
-
-                    $iterable = $this->{$property} ?? [];
-                    foreach ( $iterable as $idx => $item ) {
-                        $itemId = ( new EntityDecorator($item, $entityIdAllocator) )->getId();
-                        $itemCloned = $graph[ $class ][ $itemId ]
-                            ?? clone $item;
-
-                        $itemCloned = $pipeline->handle($itemCloned, $this, $property, $idx);
-
-                        $itemsCloned[ $idx ] = $itemCloned;
-
-                        $graph[ $class ][ $itemId ] = $itemCloned;
-
-                        if (isset($tree[ $strategyId ][ $property ])) {
-                            $queueItem[] = $itemCloned;
-                            $queueStrategy[] = $tree[ $strategyId ][ $property ];
-                        }
-                    }
-
-                    $itemsCloned = $pipeline->handleMany($itemsCloned, $this, $property);
-
-                    $this->{$property} = $itemsCloned;
-                }
-            } )
-                ->call($currentItem, $currentStrategy);
+                $graph
+            );
         }
 
-        return $clonedRoot;
+        return $fromCloned;
+    }
+
+    /**
+     * @param object   $item
+     * @param Strategy $strategy
+     *
+     * @param array    $queueItem
+     * @param array    $queueStrategy
+     *
+     * @param array    $graph
+     *
+     * @return EntityCopy
+     */
+    protected function buildItem(
+        object $item,
+        Strategy $strategy,
+
+        &$queueItem = [],
+        &$queueStrategy = [],
+
+        &$graph = []
+    ) : EntityCopy
+    {
+        $strategyTree = $this->strategyTree->getTree();
+
+        foreach ( $strategy->getOne() as $property => $class ) {
+            if (! $child = $this->objectGetProperty($item, $property)) {
+                continue;
+            }
+
+            $childCloned = $this->cloneItem($strategy, $child, $item, $property, $graph);
+
+            if (isset($strategyTree[ $strategy->getId() ][ $property ])) {
+                $childStrategy = $strategyTree[ $strategy->getId() ][ $property ];
+
+                $queueItem[] = $childCloned;
+                $queueStrategy[] = $childStrategy;
+            }
+
+            $this->objectSetProperty($item, $property, $childCloned);
+        }
+
+        foreach ( $strategy->getMany() as $property => $class ) {
+            if (! $children = $this->objectGetProperty($item, $property)) {
+                continue;
+            }
+
+            $childrenCloned = [];
+            foreach ( $children as $idx => $child ) {
+                $childCloned = $this->cloneItem($strategy, $child, $item, $property, $graph);
+
+                $childrenCloned[ $idx ] = $childCloned;
+
+                if (isset($strategyTree[ $strategy->getId() ][ $property ])) {
+                    $childStrategy = $strategyTree[ $strategy->getId() ][ $property ];
+
+                    $queueItem[] = $childCloned;
+                    $queueStrategy[] = $childStrategy;
+                }
+            }
+
+            foreach ( $childrenCloned as $idx => $childCloned ) {
+                $child = $children[ $idx ];
+
+                $this->resultReducer->handle($childCloned, $idx, $child, $item, $property, $strategy);
+            }
+
+            $this->objectSetProperty($item, $property, $this->resultReducer->getCarry());
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param Strategy $strategy
+     *
+     * @param object   $child
+     * @param object   $item
+     * @param string   $property
+     *
+     * @param array    $graph
+     *
+     * @return mixed
+     */
+    protected function cloneItem(
+        Strategy $strategy,
+
+        object $child,
+        object $item,
+        string $property,
+
+        &$graph = []
+    )
+    {
+        $class = get_class($child);
+
+        $entity = new EntityDecorator($child, $this->entityIdAllocator);
+        $entityId = $entity->getId();
+
+        if (isset($graph[ $class ][ $entityId ])) {
+            $childCloned = $graph[ $class ][ $entityId ];
+
+        } else {
+            $childCloned = clone $child;
+            $childCloned = $this->resultMapper->handle($childCloned, $child, $item, $property, $strategy);
+
+            $graph[ $class ][ $entityId ] = $childCloned;
+        }
+
+        return $childCloned;
     }
 
 
@@ -182,13 +268,6 @@ class EntityCopy
         return $this->from;
     }
 
-    /**
-     * @return Strategy
-     */
-    public function getStrategy() : Strategy
-    {
-        return $this->strategy;
-    }
 
     /**
      * @return StrategyTree
@@ -213,18 +292,6 @@ class EntityCopy
 
 
     /**
-     * @return Strategy
-     */
-    public function strategy() : Strategy
-    {
-        $this->strategyTree = new StrategyTree();
-
-        $this->strategyTree->setRoot($strategy = new Strategy($this, $this->strategyTree));
-
-        return $strategy;
-    }
-
-    /**
      * @return array
      */
     public function strategyToArray() : array
@@ -242,6 +309,7 @@ class EntityCopy
 
             foreach ( $tree[ $strategyId ] as $property => $childStrategy ) {
                 if (isset($tree[ $childStrategy->getId() ])) {
+                    // ! recursion
                     $result[ $property ] = $fn($childStrategy);
 
                 } else {
@@ -263,37 +331,62 @@ class EntityCopy
 
 
     /**
-     * @param \Closure $pipe
+     * @param mixed ...$mappers
      *
      * @return static
      */
-    public function pipe(\Closure $pipe) : EntityCopy
+    public function map(...$mappers) : EntityCopy
     {
-        $this->pipeline->pipe($pipe);
+        foreach ( $mappers as $r ) {
+            $this->resultMapper->map($r);
+        }
 
         return $this;
     }
 
     /**
-     * @param \Closure $pipe
+     * @param mixed ...$reducers
      *
      * @return static
      */
-    public function pipeOne(\Closure $pipe) : EntityCopy
+    public function reduce(...$reducers) : EntityCopy
     {
-        $this->pipeline->pipeOne($pipe);
+        foreach ( $reducers as $r ) {
+            $this->resultReducer->reduce($r);
+        }
 
         return $this;
     }
 
+
     /**
-     * @param \Closure $pipe
+     * @param object $object
+     * @param string $property
      *
-     * @return static
+     * @return mixed
      */
-    public function pipeMany(\Closure $pipe) : EntityCopy
+    protected function objectGetProperty(object $object, string $property)
     {
-        $this->pipeline->pipeMany($pipe);
+        $fnGetter = function () use ($property) {
+            return $this->{$property} ?? null;
+        };
+
+        return $fnGetter->call($object);
+    }
+
+    /**
+     * @param object $object
+     * @param string $property
+     * @param        $value
+     *
+     * @return EntityCopy
+     */
+    protected function objectSetProperty(object $object, string $property, $value) : EntityCopy
+    {
+        ( function ($value) use ($property) {
+            $this->{$property} = $value;
+        } )
+            ->call($object, $value);
 
         return $this;
     }

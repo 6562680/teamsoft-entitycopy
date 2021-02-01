@@ -2,6 +2,8 @@
 
 namespace Teamsoft\EntityCopy;
 
+use Teamsoft\EntityCopy\Exceptions\RuntimeException;
+
 /**
  * Class EntityDecorator
  */
@@ -43,7 +45,7 @@ class EntityDecorator implements EntityInterface
         }
 
         if ($this->idAllocator) {
-            $id = $this->idAllocator->call($this->entity);
+            $id = $this->idAllocator->call($this->entity, $this->entity);
 
         } elseif (is_a($this->entity, EntityInterface::class)) {
             $id = $this->entity->getId();
@@ -52,8 +54,12 @@ class EntityDecorator implements EntityInterface
             $id = $this->entity->id;
 
         } else {
-            $id = $this->entity->getId();
-
+            try {
+                $id = $this->entity->getId();
+            }
+            catch ( \Throwable $e ) {
+                throw new RuntimeException('Method not exists: ' . get_class($this->entity) . '::getId', null, $e);
+            }
         }
 
         return $this->id = $id;

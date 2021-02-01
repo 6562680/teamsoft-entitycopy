@@ -1,6 +1,6 @@
 <?php
 
-namespace Teamsoft\EntityCopy\Tests;
+namespace Teamsoft\EntityCopy\Tests\Demo;
 
 class Entity
 {
