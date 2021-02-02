@@ -35,4 +35,15 @@ class UserWalletEntity extends AbstractEntity
      * @var string
      */
     public $user;
+
+
+    /**
+     * Cloner
+     */
+    public function __clone()
+    {
+        parent::__clone();
+
+        $this->user = null;
+    }
 }

@@ -4,6 +4,12 @@ use Teamsoft\EntityCopy\EntityCopy;
 use Teamsoft\EntityCopy\Tests\Demo\Entity;
 use Teamsoft\EntityCopy\Tests\Demo\ArrayCollection;
 
+/**
+ * @var EntityCopy $cloner
+ */
+
+$cloner = require __DIR__ . '/bootstrap/nativeCloner.php';
+
 $entity1 = new Entity([
     'title' => 'entity1',
 ]);
@@ -38,37 +44,7 @@ $entity4 = new Entity([
 ]);
 
 $entity = $entity4;
-
-// lets create cloner
-$cloner = new EntityCopy();
-
-// of course, we need an unique id to prevent double-copying of single record, we have to get it from entity or from php object
-$cloner->setEntityIdAllocator(function ($entity) {
-    return spl_object_id($entity);
-});
-
-// for example, we have doctine $entityManager
-$cloneMap = [];
-$entityManager = [];
-$cloner
-    ->map(function ($entityCloned, $entityOriginal) use (&$cloneMap, &$entityManager) {
-        $entityClonedId = spl_object_id($entityCloned);
-        $entityOriginalId = spl_object_id($entityOriginal);
-
-        $cloneMap[ $entityOriginalId ] = $entityClonedId;
-
-        return $entityManager[ $entityClonedId ] = $entityCloned;
-    });
-
-// for example, we have to store collections into array collection
-$cloner
-    ->newReducer(new ArrayCollection())
-    ->reduce(function (ArrayCollection $carry, $entity, $idx) {
-        return $carry->put($idx, $entity);
-    });
-
-// then we define the strategy of copy-nesting
-$builder = $cloner->from($entity4)
+$builder = $cloner->from($entity)
     // ->one('same', Entity::class)
     ->one('copy', Entity::class)
     ->one('copy2', Entity::class)
@@ -79,16 +55,11 @@ $builder = $cloner->from($entity4)
     /**/ ->many('children', Entity::class)
     ->endChild();
 
-// we're getting up!
 $entityCopy = $builder->build();
 
-// result here
 dd([
     'strategy' => $cloner->strategyToArray(),
 
     'entity'     => $entity,
     'entityCopy' => $entityCopy,
-
-    'cloneMap'      => $cloneMap,
-    'entityManager' => $entityManager,
 ]);

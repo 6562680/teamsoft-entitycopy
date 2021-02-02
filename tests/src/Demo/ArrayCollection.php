@@ -10,7 +10,18 @@ class ArrayCollection implements \Iterator
     /**
      * @var array
      */
-    protected $list = [];
+    protected $list;
+
+
+    /**
+     * Constructor
+     *
+     * @param array $elements
+     */
+    public function __construct(array $elements = [])
+    {
+        $this->list = $elements;
+    }
 
 
     /**

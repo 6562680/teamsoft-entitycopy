@@ -3,6 +3,7 @@
 namespace Teamsoft\EntityCopy;
 
 use Teamsoft\EntityCopy\Exceptions\Runtime\OverflowException;
+use Teamsoft\EntityCopy\Exceptions\Logic\BadMethodCallException;
 use Teamsoft\EntityCopy\Exceptions\Logic\InvalidArgumentException;
 
 /**
@@ -95,11 +96,34 @@ class Strategy
 
 
     /**
-     * @param Strategy $last
+     * @param string $property
+     *
+     * @return bool
      */
-    protected function setLast(Strategy $last)
+    public function hasOneOrManyByName(string $property) : bool
     {
-        $this->last = $last;
+        return $this->hasOneByName($property)
+            || $this->hasManyByName($property);
+    }
+
+    /**
+     * @param string $property
+     *
+     * @return bool
+     */
+    public function hasOneByName(string $property) : bool
+    {
+        return isset($this->one[ $property ]);
+    }
+
+    /**
+     * @param string $property
+     *
+     * @return bool
+     */
+    public function hasManyByName(string $property) : bool
+    {
+        return isset($this->many[ $property ]);
     }
 
 
@@ -108,6 +132,10 @@ class Strategy
      */
     public function child() : Strategy
     {
+        if (! isset($this->last)) {
+            throw new BadMethodCallException('Unable to locate last item to call child(), try to call one()/many() first');
+        }
+
         return $this->last;
     }
 
@@ -116,6 +144,10 @@ class Strategy
      */
     public function endChild() : Strategy
     {
+        if (! isset($this->parent)) {
+            throw new BadMethodCallException('Unable to locate parent to call endChild(), try to call child() first');
+        }
+
         return $this->parent;
     }
 
@@ -128,7 +160,7 @@ class Strategy
      */
     public function one(string $property, string $class) : Strategy
     {
-        if (isset($this->one[ $property ]) || isset($this->many[ $property ])) {
+        if ($this->hasOneOrManyByName($property)) {
             throw new OverflowException('Property is already has a strategy: ' . $property);
         }
 
@@ -136,15 +168,13 @@ class Strategy
             throw new InvalidArgumentException('Class should be valid class name');
         }
 
-        if (! property_exists($class, $property)) {
-            throw new InvalidArgumentException('Property is not exists in class: ' . $class);
-        }
-
         $this->one[ $property ] = $class;
 
-        $this->last = new Strategy($this->entityCopy, $this->strategyTree, $this);
+        $strategy = new Strategy($this->entityCopy, $this->strategyTree, $this);
 
-        $this->strategyTree->addNodeFor($this, $this->last, $property);
+        $this->strategyTree->addNodeFor($this, $strategy, $property);
+
+        $this->last = $strategy;
 
         return $this;
     }
@@ -157,7 +187,7 @@ class Strategy
      */
     public function many(string $property, string $class) : Strategy
     {
-        if (isset($this->one[ $property ]) || isset($this->many[ $property ])) {
+        if ($this->hasOneOrManyByName($property)) {
             throw new OverflowException('Property is already has a strategy: ' . $property);
         }
 
@@ -165,15 +195,13 @@ class Strategy
             throw new InvalidArgumentException('Class should be valid class name');
         }
 
-        if (! property_exists($class, $property)) {
-            throw new InvalidArgumentException('Property is not exists in class: ' . $class);
-        }
-
         $this->many[ $property ] = $class;
 
-        $this->last = new Strategy($this->entityCopy, $this->strategyTree, $this);
+        $strategy = new Strategy($this->entityCopy, $this->strategyTree, $this);
 
-        $this->strategyTree->addNodeFor($this, $this->last, $property);
+        $this->strategyTree->addNodeFor($this, $strategy, $property);
+
+        $this->last = $strategy;
 
         return $this;
     }

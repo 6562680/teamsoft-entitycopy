@@ -27,31 +27,38 @@ class ResultMapperQueue
 
 
     /**
-     * @param object   $itemCloned
-     * @param object   $itemParent
+     * @param mixed    $itemCloned
+     * @param mixed    $itemOriginal
+     * @param object   $itemParentTo
+     * @param object   $itemParentFrom
      * @param string   $property
-     * @param object   $itemOriginal
+     *
      * @param Strategy $strategy
      *
      * @return object
      */
     public function handle(
-        object $itemCloned,
-        object $itemOriginal,
-        object $itemParent,
+        $itemCloned,
+        $itemOriginal,
+
+        object $itemParentTo,
+        object $itemParentFrom,
         string $property,
+
         Strategy $strategy
     ) : object
     {
-        $options = [
-            'item_original' => $itemOriginal,
-            'item_parent'   => $itemParent,
-            'property'      => $property,
-            'strategy'      => $strategy,
-        ];
-
         foreach ( $this->mappers as $mapper ) {
-            $itemCloned = $mapper($itemCloned, $itemOriginal, $itemParent, $options);
+            $itemCloned = $mapper(
+                $itemCloned,
+                $itemOriginal,
+
+                $itemParentTo,
+                $itemParentFrom,
+                $property,
+
+                $strategy
+            );
         }
 
         return $itemCloned;

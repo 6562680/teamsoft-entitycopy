@@ -30,7 +30,7 @@ class UserEntity extends AbstractEntity
     public $userWallets;
 
     /**
-     * @ORM\ManyToMany(targetEntity="UserEntity")
+     * @ORM\ManyToMany(targetEntity="EmailEntity", inversedBy="emailUsers")
      * @ORM\JoinTable(name="users_emails",
      *     joinColumns={@ORM\JoinColumn(name="user_id", referencedColumnName="id")},
      *     inverseJoinColumns={@ORM\JoinColumn(name="email_id", referencedColumnName="id")}
@@ -47,5 +47,18 @@ class UserEntity extends AbstractEntity
     {
         $this->userWallets = new ArrayCollection();
         $this->userEmails = new ArrayCollection();
+    }
+
+    /**
+     * Cloner
+     */
+    public function __clone()
+    {
+        parent::__clone();
+
+        $this->userProfile = null;
+
+        $this->userWallets->clear();
+        $this->userEmails->clear();
     }
 }
